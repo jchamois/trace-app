@@ -97,12 +97,22 @@ request → canal de préversion, qui fournit **une URL HTTPS à certificat vali
 la seule façon fiable d'essayer la caméra depuis un iPhone, Safari étant capricieux
 derrière un certificat auto-signé.
 
-Deux réglages sont vitaux dans `firebase.json` :
+Trois réglages sont vitaux dans `firebase.json`, qui n'accepte pas de commentaires :
 
-- `Permissions-Policy: camera=(self)` — la valeur héritée de `charge-app`,
+- **`Permissions-Policy: camera=(self)`** — la valeur héritée de `charge-app`,
   `camera=()`, **interdirait la caméra** et rendrait l'application entièrement
-  inopérante ;
-- `connect-src 'self'` — aucune requête tierce, polices auto-hébergées comprises.
+  inopérante. Rien dans le build ne le signalerait.
+- **`connect-src 'self'`** — aucune requête tierce, polices auto-hébergées
+  comprises. C'est la garantie vérifiable que rien ne quitte l'appareil.
+- **`script-src` doit garder `'unsafe-inline'`.** En `ssr: false`, Nuxt émet deux
+  scripts inline non négociables — l'`importmap` et `window.__NUXT__.config` — et
+  les bloquer empêche l'application de démarrer, sur une page blanche muette. Des
+  hachages ne tiendraient pas : le `buildId` du bloc de configuration change à
+  chaque build. Le risque est contenu ailleurs — aucun script tiers, `connect-src
+  'self'`, et `vue/no-v-html` en erreur dans la configuration ESLint.
+
+Ces en-têtes ne s'appliquent **pas** au serveur de dev. Les vérifier demande soit
+l'émulateur (`npx firebase emulators:start --only hosting`), soit un déploiement.
 
 ### Mise en place, une fois
 
