@@ -1,0 +1,51 @@
+# Canal de préversion, une URL par branche.
+#
+# `charge-app` s'en passe faute de pull requests. Ici il gagne sa place pour une
+# raison qui n'a rien à voir avec la revue de code : **il fournit une URL HTTPS
+# avec un certificat valide**, seule façon fiable d'essayer la caméra depuis un
+# téléphone. Le certificat auto-signé de `nuxt dev --https` passe sur Chrome
+# Android mais reste capricieux sur iOS Safari, qui peut refuser `getUserMedia`
+# derrière une autorité non fiable.
+name: Preview channel on pull request
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # Nécessaire au commentaire qui porte l'URL de préversion.
+  pull-requests: write
+
+concurrency:
+  group: preview-${{ github.head_ref }}
+  # Contrairement à la production : une préversion périmée n'intéresse personne.
+  cancel-in-progress: true
+
+jobs:
+  build_and_preview:
+    # Les pull requests venues d'un fork n'ont pas accès aux secrets : la tentative
+    # échouerait sur une erreur d'authentification opaque.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run generate
+
+      # `channelId` absent : l'action crée un canal éphémère propre à la PR et en
+      # publie l'URL en commentaire.
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

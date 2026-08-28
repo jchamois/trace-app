@@ -1,0 +1,116 @@
+/* Reset et fondations. Les valeurs viennent toutes de `tokens.css` (handoff) :
+   ce fichier ne définit aucune couleur ni aucune taille en dur. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Application sombre par parti pris, pas par préférence système : il n'y a pas
+     de variante claire. Un écran clair se reflèterait sur la feuille et fausserait
+     la perception du tracé. `dark` évite au navigateur de repeindre les contrôles
+     natifs, `::selection` et les barres de défilement en clair. */
+  color-scheme: dark;
+
+  /* Empêche le zoom automatique de Safari iOS à la mise au point d'un champ, sans
+     bloquer le zoom manuel de l'utilisateur (ce que ferait `user-scalable=no`). */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-block-size: 100dvh;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+
+  /* Tue le « tirer pour rafraîchir » de Chrome Android et le rebond de Safari.
+     Sur l'écran de travail, un glissement vers le bas est un geste de calage :
+     sans ça il rechargerait la page et emporterait la séance en cours. */
+  overscroll-behavior: none;
+
+  /* Le halo bleu au toucher n'a aucun sens sur une interface posée par-dessus un
+     flux vidéo, où chaque contrôle porte déjà son propre état. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Pas de sélection de texte parasite : les gestes de l'app sont des glissements
+   (poignées, curseurs, feuilles), et un appui maintenu déclencherait sinon la
+   sélection puis le menu contextuel. Réactivée là où du texte est réellement
+   sélectionnable. */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-inline-size: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+button {
+  cursor: pointer;
+  /* Supprime le délai de 300 ms et les gestes de défilement sur les contrôles. */
+  touch-action: manipulation;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Le focus clavier reste visible partout — il ne doit pas disparaître sous
+   prétexte que la cible première est tactile. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Libellés réservés aux lecteurs d'écran : hors écran mais présents dans le DOM. */
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

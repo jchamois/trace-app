@@ -1,0 +1,66 @@
+{
+  "name": "trace-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "scripts": {
+    "check:node": "node scripts/check-node.mjs",
+    "predev": "npm run check:node",
+    "dev": "nuxt dev",
+    "predev:https": "npm run check:node",
+    "dev:https": "nuxt dev --https --host",
+    "prebuild": "npm run check:node",
+    "build": "nuxt build",
+    "pregenerate": "npm run check:node",
+    "generate": "nuxt generate",
+    "prepreview": "npm run check:node",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "prelint": "npm run check:node",
+    "lint": "eslint .",
+    "prelint:fix": "npm run check:node",
+    "lint:fix": "eslint . --fix",
+    "pretypecheck": "npm run check:node",
+    "typecheck": "nuxt typecheck",
+    "pretest": "npm run check:node",
+    "test": "vitest run",
+    "pretest:watch": "npm run check:node",
+    "test:watch": "vitest",
+    "icons": "node scripts/build-icons.mjs",
+    "deploy": "npm run generate && firebase deploy --only hosting",
+    "preview:channel": "npm run generate && firebase hosting:channel:deploy dev"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "idb": "^8.0.3",
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.41",
+    "vue-router": "^5.2.0"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.17.0",
+    "@nuxt/fonts": "^0.14.0",
+    "@nuxt/test-utils": "^4.1.0",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "@vue/test-utils": "^2.4.11",
+    "eslint": "^10.8.1",
+    "eslint-plugin-vuejs-accessibility": "^2.6.0",
+    "firebase-tools": "^15.27.0",
+    "happy-dom": "^20.11.2",
+    "sharp": "^0.34.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.10"
+  },
+  "allowScripts": {
+    "sharp@0.34.5": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "unrs-resolver@1.12.2": true,
+    "protobufjs@7.6.6": true,
+    "google-logging-utils@1.2.0": true
+  }
+}

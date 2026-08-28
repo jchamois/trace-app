@@ -1,0 +1,55 @@
+# Déploiement en production sur push vers `main`.
+#
+# Un seul job, là où `charge-app` en enchaîne trois : il n'y a ici ni règles
+# Firestore à tester puis publier avant le site, ni la moindre variable
+# d'environnement — l'application n'utilise pas le SDK Firebase, Firebase ne sert
+# qu'à héberger. Seul le compte de service est nécessaire.
+name: Deploy to Firebase Hosting on merge
+
+on:
+  push:
+    branches:
+      - main
+
+# Le workflow ne fait qu'un checkout : rien ne justifie les permissions par défaut
+# du dépôt.
+permissions:
+  contents: read
+
+# Deux pushes rapprochés se déploieraient sinon en parallèle et pourraient se
+# croiser. Sans annulation : un déploiement interrompu à mi-parcours est pire que
+# de l'attendre.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      # `npm ci` déclenche `postinstall: nuxt prepare`, qui génère
+      # `.nuxt/eslint.config.mjs` dont dépend `eslint.config.mjs` : d'où l'ordre.
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      # `generate` et jamais `build` : `build` produit un serveur Nitro et laisse
+      # `.output/public` sans le moindre HTML. C'est l'erreur qui met en ligne un
+      # site vide sans qu'aucune étape n'échoue.
+      - run: npm run generate
+
+      # Le site cible tient dans `firebase.json` : ni `target` ici, ni cible dans
+      # `.firebaserc`.
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live

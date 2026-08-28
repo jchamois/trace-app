@@ -1,0 +1,26 @@
+node_modules
+.nuxt
+.output
+.nitro
+.cache
+dist
+
+.env
+.env.*
+!.env.example
+
+.firebase
+firebase-debug.log
+
+# Handoffs de design : prototypes, canvas et captures — référence locale, pas du
+# code source. Le dépôt est public et ces lots pèsent plusieurs mégaoctets.
+# Motif générique en plus du chemin : un lot renommé doit rester ignoré.
+docs/handoff/
+design_handoff_*
+
+# Documents de planification, propres à une session de travail.
+.plans
+
+.DS_Store
+*.log
+.eslintcache

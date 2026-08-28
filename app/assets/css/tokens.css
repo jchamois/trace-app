@@ -1,0 +1,62 @@
+:root {
+  /* Couleurs — interface sombre, un seul accent */
+  --bg:            #0A0A0B;
+  --surface:       #131316;   /* fond opaque des contrôles */
+  --surface-2:     #1B1B1F;   /* pistes, pastilles, états inertes */
+  --surface-sunk:  #0E0E10;
+  --line:          rgba(255, 255, 255, .12);
+  --line-soft:     rgba(255, 255, 255, .08);
+  --text:          #F2F1EE;
+  --text-dim:      rgba(242, 241, 238, .62);
+  --text-faint:    rgba(242, 241, 238, .42);
+  --accent:        #6E56F8;   /* oklch(.58 .22 285) — lisible sur blanc surexposé et sur noir */
+  --accent-soft:   rgba(110, 86, 248, .16);
+  --accent-halo:   rgba(110, 86, 248, .22);
+  --on-accent:     #FFFFFF;
+  --scrim:         rgba(10, 10, 11, .72);  /* voile sous tout élément posé sur la vidéo */
+  --overlay-chrome: rgba(18, 18, 20, .94);
+
+  /* Espacements */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* Rayons */
+  --r-sm: 10px; --r-md: 14px; --r-lg: 16px;
+  --r-xl: 20px; --r-sheet: 24px; --r-pill: 999px;
+
+  /* Graisses & type */
+  --font-ui: 'Archivo', Helvetica, Arial, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --fs-caption: 12px; --fs-body: 15px; --fs-label: 14px;
+  --fs-action: 17px; --fs-title: 19px; --fs-display: 28px;
+
+  /* Ergonomie */
+  --touch-min: 48px;          /* cible minimale, doigts graphités */
+  --handle-visual: 36px;      /* poignée au repos */
+  --handle-active: 44px;      /* poignée en prise */
+  --toolbar-h: 76px;
+  --sheet-max-h: 60vh;        /* la zone de travail reste visible */
+
+  /* Ombres */
+  --shadow-chrome: 0 12px 34px rgba(0, 0, 0, .6);
+  --shadow-sheet: 0 -20px 50px rgba(0, 0, 0, .65);
+  --shadow-thumb: 0 2px 10px rgba(0, 0, 0, .7);
+
+  /* Encoches — plein écran une fois installée */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --pad-top:    calc(var(--safe-top) + var(--sp-3));
+  --pad-bottom: calc(var(--safe-bottom) + var(--sp-3));
+  --pad-side:   calc(var(--safe-left) + var(--sp-3));
+
+  /* Mouvement */
+  --ease: cubic-bezier(.2, .8, .25, 1);
+  --dur-fast: 120ms; --dur-sheet: 260ms; --dur-chrome: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-sheet: 0ms; --dur-chrome: 0ms; }
+}
