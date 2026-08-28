@@ -11,7 +11,23 @@
  * jusqu'à preuve du contraire.
  */
 import { unzip, zip } from 'fflate'
-import type { TraceSession } from './session'
+import type { SessionFields, TraceSession } from './session'
+import { collectSession } from './session'
+
+/**
+ * Types acceptés à l'import. Le type déclaré dans le manifeste devient celui d'un
+ * `Blob` exposé en URL `blob:` de notre origine — il ne peut pas être arbitraire.
+ */
+const ALLOWED_IMAGE_TYPES = ['image/webp', 'image/png', 'image/jpeg']
+
+/**
+ * Plafonds de lecture. `fflate` n'en applique aucun : une archive de 10 ko peut
+ * se décompresser en gigaoctets et faire tomber l'onglet, et rien ne borne le
+ * nombre de tracés déclarés. Auto-infligé — l'utilisateur choisit le fichier —
+ * mais deux comparaisons valent mieux qu'un onglet mort.
+ */
+const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+const MAX_SESSIONS = 500
 
 /**
  * Sans ce numéro dès la première version, la première évolution du schéma rendrait
@@ -25,7 +41,7 @@ const MANIFEST = 'library.json'
 export class ArchiveError extends Error {}
 
 /** Une session sans ses blobs : ce qui tient dans le manifeste JSON. */
-export type SerializedSession = Omit<TraceSession, 'image' | 'thumb'> & {
+export type SerializedSession = SessionFields & {
   imageType: string
   thumbType: string
 }
@@ -89,21 +105,53 @@ export const parseManifest = (data: unknown): Manifest => {
     throw new ArchiveError('Archive illisible : la liste des tracés est absente.')
   }
 
+  if (data.sessions.length > MAX_SESSIONS) {
+    throw new ArchiveError(
+      `Cette archive déclare ${data.sessions.length} tracés, au-delà de la limite de ${MAX_SESSIONS}.`,
+    )
+  }
+
   const sessions = data.sessions.map((raw, index) => {
-    if (!isObject(raw)) throw new ArchiveError(`Archive illisible : le tracé n° ${index + 1} est invalide.`)
+    /* Politique **stricte** : l'archive vient de l'extérieur, on refuse plutôt
+       que de réparer. `collectSession` connaît le schéma, elle ne décide de rien —
+       c'est ici qu'on choisit de lever, et dans `useSessions` qu'on choisit de
+       réparer une donnée écrite par un build antérieur. Une seule connaissance,
+       deux politiques. */
+    const { value, issues } = collectSession(raw)
 
-    requireString(raw.id, `sessions[${index}].id`)
-    requireString(raw.name, `sessions[${index}].name`)
-    requireNumber(raw.updatedAt, `sessions[${index}].updatedAt`)
-
-    /* `null` est légitime : un tracé importé mais jamais ouvert n'a pas encore de
-       calage, celui-ci dépendant des proportions de l'écran. Quatre coins ou rien —
-       trois ne définissent aucune homographie. */
-    if (raw.corners !== null && (!Array.isArray(raw.corners) || raw.corners.length !== 4)) {
-      throw new ArchiveError(`Archive illisible : le calage du tracé « ${String(raw.name)} » est invalide.`)
+    if (issues.length) {
+      const fields = issues.map(i => i.field).filter(Boolean).join(', ')
+      throw new ArchiveError(
+        `Archive illisible : le tracé n° ${index + 1} est invalide`
+        + (fields ? ` (${fields}).` : '.'),
+      )
     }
 
-    return raw as unknown as SerializedSession
+    const imageType = requireString(
+      (raw as Record<string, unknown>).imageType,
+      `sessions[${index}].imageType`,
+    )
+    const thumbType = requireString(
+      (raw as Record<string, unknown>).thumbType,
+      `sessions[${index}].thumbType`,
+    )
+
+    /* Liste blanche des types MIME, et pas seulement pour la forme : le type
+       déclaré ici devient celui d'un `Blob` exposé en URL `blob:` **de notre
+       origine**. Une archive annonçant `text/html` créerait un document
+       same-origin — et notre CSP porte `script-src 'unsafe-inline'`. Aujourd'hui
+       la seule destination est un `<img>`, qui n'exécute rien ; il suffirait d'un
+       aperçu en grand pour que ça devienne du XSS stocké. */
+    for (const [field, type] of [['imageType', imageType], ['thumbType', thumbType]] as const) {
+      if (!ALLOWED_IMAGE_TYPES.includes(type)) {
+        throw new ArchiveError(
+          `Archive refusée : le tracé « ${value.name} » déclare un type d’image `
+          + `non autorisé pour ${field} (${type}).`,
+        )
+      }
+    }
+
+    return { ...value, imageType, thumbType }
   })
 
   return { formatVersion: version, exportedAt: requireNumber(data.exportedAt, 'exportedAt'), sessions }
@@ -201,6 +249,16 @@ export const exportLibrary = async (sessions: readonly TraceSession[]): Promise<
 }
 
 export const readArchive = async (file: Blob): Promise<TraceSession[]> => {
+  /* Contrôle avant décompression : `unzipAsync` inflate **tout** en mémoire avant
+     qu'on regarde quoi que ce soit. Le refus doit donc précéder la lecture, pas
+     la suivre. */
+  if (file.size > MAX_ARCHIVE_BYTES) {
+    throw new ArchiveError(
+      `Cette archive fait ${Math.round(file.size / 1024 / 1024)} Mo, `
+      + `au-delà de la limite de ${MAX_ARCHIVE_BYTES / 1024 / 1024} Mo.`,
+    )
+  }
+
   let entries: Record<string, Uint8Array>
 
   try {

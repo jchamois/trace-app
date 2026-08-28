@@ -30,13 +30,12 @@ const manifestOf = (sessions: unknown[]) => ({
   sessions,
 })
 
-const serialized = (over: Record<string, unknown> = {}) => ({
-  id: 'a',
-  name: 'Portrait Louise',
-  updatedAt: 10,
-  corners: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
-  ...over,
-})
+/** Un tracé sérialisé complet et valide, dont chaque test dégrade un champ. */
+const serialized = (over: Record<string, unknown> = {}) => {
+  const { image, thumb, ...fields } = session('a', 10, 'Portrait Louise')
+
+  return { ...fields, imageType: 'image/webp', thumbType: 'image/webp', ...over }
+}
 
 describe('parseManifest', () => {
   it('accepte un manifeste conforme', () => {
@@ -67,19 +66,61 @@ describe('parseManifest', () => {
 
   it('nomme le champ fautif quand un tracé est incomplet', () => {
     expect(() => parseManifest(manifestOf([serialized({ id: undefined })])))
-      .toThrow(/sessions\[0\]\.id/)
+      .toThrow(/\bid\b/)
   })
 
   it('refuse un calage qui n’a pas quatre coins', () => {
     // Trois poignées ne définissent pas d'homographie : le rendu serait faux.
     expect(() => parseManifest(manifestOf([serialized({ corners: [{ x: 0, y: 0 }] })])))
-      .toThrow(/calage/)
+      .toThrow(/corners/)
+  })
+
+  it('refuse un calage dont les coins ne sont pas des points', () => {
+    // `[null, null, null, null]` passait l'ancien contrôle de longueur, puis
+    // `c.x` levait dans un `computed` au premier rendu.
+    expect(() => parseManifest(manifestOf([serialized({ corners: [null, null, null, null] })])))
+      .toThrow(/corners/)
   })
 
   it('accepte un tracé jamais calé', () => {
     // Importé puis jamais ouvert : le calage dépend des proportions de l'écran, il
     // n'existe pas encore.
     expect(() => parseManifest(manifestOf([serialized({ corners: null })]))).not.toThrow()
+  })
+
+  it('refuse un tracé sans réglages', () => {
+    /* La régression de sécurité : `"params": null` passait le cast, atterrissait en
+       IndexedDB, et faisait lever un TypeError à chaque chargement de la
+       bibliothèque — vide pour toujours, sans recours depuis l'interface. */
+    expect(() => parseManifest(manifestOf([serialized({ params: null })])))
+      .toThrow(/params/)
+  })
+
+  it('refuse un réglage hors bornes', () => {
+    // Un `levels` non numérique atteignait `gl.uniform1f` et noircissait le calque.
+    expect(() => parseManifest(manifestOf([serialized({ params: { ...serialized().params, levels: 'beaucoup' } })])))
+      .toThrow(/levels/)
+  })
+
+  it('refuse des dimensions de feuille invalides', () => {
+    expect(() => parseManifest(manifestOf([serialized({ paperSizeCm: null })])))
+      .toThrow(/paperSizeCm/)
+  })
+
+  it('refuse un type MIME hors liste blanche', () => {
+    /* Le type déclaré devient celui d'un `Blob` exposé en URL `blob:` de notre
+       origine. `text/html` y créerait un document same-origin, et notre CSP porte
+       `script-src 'unsafe-inline'`. */
+    expect(() => parseManifest(manifestOf([serialized({ imageType: 'text/html' })])))
+      .toThrow(/type d’image/)
+    expect(() => parseManifest(manifestOf([serialized({ thumbType: 'image/svg+xml' })])))
+      .toThrow(/type d’image/)
+  })
+
+  it('refuse une archive qui déclare trop de tracés', () => {
+    const many = Array.from({ length: 501 }, (_, i) => serialized({ id: `s${i}` }))
+
+    expect(() => parseManifest(manifestOf(many))).toThrow(/limite/)
   })
 })
 

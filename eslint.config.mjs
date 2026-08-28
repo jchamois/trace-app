@@ -45,7 +45,14 @@ export default withNuxt(
       'prefer-const': 'error',
       // Le code mort se supprime, il ne se commente pas.
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      /* `ignoreRestSiblings` : le motif `const { image, ...fields } = session` sert
+         à **retirer** une propriété, la variable n'a pas vocation à être lue.
+         `argsIgnorePattern` ne couvre que les paramètres, pas les déstructurations. */
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+      }],
       // Sécurité : pas d'exécution dynamique de chaîne.
       'no-eval': 'error',
       'no-implied-eval': 'error',

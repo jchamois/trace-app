@@ -65,7 +65,9 @@ const restore = async (event: Event) => {
 
   try {
     const merge = mergeSessions(list.value, await readArchive(file))
-    await Promise.all(merge.write.map(put))
+    /* `touch: false` : l'horodatage de l'archive fait foi, c'est lui qui vient
+       d'arbitrer la fusion. Le redater ici annulerait la décision. */
+    await Promise.all(merge.write.map(session => put(session, { touch: false })))
     await refresh()
 
     const parts: string[] = []

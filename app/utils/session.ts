@@ -131,6 +131,147 @@ export const defaultCorners = (
   ]
 }
 
+/* ───────────────────────────── Frontières ─────────────────────────────
+ *
+ * Une session peut entrer par deux chemins, et un seul était gardé :
+ *
+ * - **une archive ZIP**, écrite par n'importe qui — donc hostile par défaut ;
+ * - **IndexedDB**, écrit par une version antérieure de l'application — donc
+ *   honnête mais périmé.
+ *
+ * Les deux ont besoin de la **même connaissance du schéma** et de **politiques
+ * opposées** : rejeter bruyamment pour l'archive, réparer en silence pour la base.
+ * D'où une seule traversée qui rend la valeur réparée *et* la liste des écarts ;
+ * l'appelant choisit quoi en faire.
+ *
+ * Avant ça, `parseManifest` validait 4 champs sur 15 puis castait le reste. Une
+ * archive portant `"params": null` faisait lever un TypeError à **chaque**
+ * chargement de la bibliothèque, sans recours depuis l'interface.
+ */
+
+/** Une session sans ses blobs : ce que porte le manifeste, et ce qu'on valide. */
+export type SessionFields = Omit<TraceSession, 'image' | 'thumb'>
+
+export interface FieldIssue { field: string, reason: string }
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+const isFinitePt = (v: unknown): v is Pt =>
+  isObject(v) && Number.isFinite(v.x) && Number.isFinite(v.y)
+
+/** Bornes de chaque réglage. Hors bornes, un `NaN` atteindrait `gl.uniform1f`. */
+const PARAM_RANGES: Record<keyof RenderParams, [number, number]> = {
+  opacity: [0.05, 1],
+  contrast: [-0.9, 2],
+  gamma: [0.3, 3],
+  inkRatio: [0.01, 0.3],
+  levels: [2, 8],
+}
+
+const RENDER_MODES: RenderMode[] = ['photo', 'edges', 'posterize']
+const ALIGN_MODES: AlignMode[] = ['simple', 'quad']
+
+/**
+ * Valide et répare une session en une passe.
+ *
+ * Ne lève jamais : c'est ce qui permet aux deux frontières de la partager. La
+ * politique — rejeter ou accepter la réparation — appartient à l'appelant.
+ */
+export const collectSession = (
+  raw: unknown,
+): { value: SessionFields, issues: FieldIssue[] } => {
+  const issues: FieldIssue[] = []
+  const src = isObject(raw) ? raw : {}
+  if (!isObject(raw)) issues.push({ field: '', reason: 'le tracé n’est pas un objet' })
+
+  const take = <T>(field: string, ok: boolean, value: T, fallback: T): T => {
+    if (ok) return value
+    issues.push({ field, reason: 'absent ou invalide' })
+
+    return fallback
+  }
+
+  const now = Date.now()
+  const id = take('id', typeof src.id === 'string' && Boolean(src.id), src.id as string, '')
+  const name = take('name', typeof src.name === 'string' && Boolean(src.name), src.name as string, 'Sans titre')
+
+  /* `Object.hasOwn` et non l'opérateur `in` : `in` parcourt la chaîne de
+     prototypes, donc `'toString' in PAPER_LABELS` vaut vrai. Un format hérité
+     passait la validation et arrivait tel quel dans `PAPER_LABELS[format]`, où il
+     rendait une fonction. */
+  const paperFormat = take(
+    'paperFormat',
+    typeof src.paperFormat === 'string' && Object.hasOwn(PAPER_LABELS, src.paperFormat),
+    src.paperFormat as PaperFormat,
+    'A4',
+  )
+
+  /* Le repli suit le format déclaré plutôt qu'un A4 en dur : si seul
+     `paperSizeCm` est corrompu, on retombe sur des dimensions cohérentes. */
+  const fallbackSize = paperFormat === 'free' ? PAPER_SIZES.A4 : PAPER_SIZES[paperFormat]
+  const rawSize = src.paperSizeCm
+  const paperSizeCm = take(
+    'paperSizeCm',
+    isObject(rawSize) && Number(rawSize.w) > 0 && Number(rawSize.h) > 0,
+    rawSize as { w: number, h: number },
+    { ...fallbackSize },
+  )
+
+  /* `null` est légitime — un tracé jamais ouvert n'a pas de calage, celui-ci
+     dépendant des proportions de l'écran. Un calage douteux se répare donc en
+     `null` plutôt qu'en valeurs arbitraires : l'écran de travail le reposera. */
+  const rawCorners = src.corners
+  const cornersValid = rawCorners === null
+    || (Array.isArray(rawCorners) && rawCorners.length === 4 && rawCorners.every(isFinitePt))
+  const corners = take(
+    'corners',
+    cornersValid,
+    rawCorners as [Pt, Pt, Pt, Pt] | null,
+    null,
+  )
+
+  const params = {} as RenderParams
+  const rawParams = isObject(src.params) ? src.params : {}
+  if (!isObject(src.params)) issues.push({ field: 'params', reason: 'absent ou invalide' })
+
+  for (const key of Object.keys(PARAM_RANGES) as (keyof RenderParams)[]) {
+    const [min, max] = PARAM_RANGES[key]
+    const v = rawParams[key]
+    const ok = typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max
+    params[key] = take(`params.${key}`, ok, v as number, DEFAULT_PARAMS[key])
+  }
+
+  return {
+    value: {
+      id,
+      name,
+      createdAt: take('createdAt', Number.isFinite(src.createdAt), src.createdAt as number, now),
+      updatedAt: take('updatedAt', Number.isFinite(src.updatedAt), src.updatedAt as number, now),
+      corners,
+      mode: take('mode', ALIGN_MODES.includes(src.mode as AlignMode), src.mode as AlignMode, 'simple'),
+      paperFormat,
+      paperSizeCm: { w: paperSizeCm.w, h: paperSizeCm.h },
+      targetWidthCm: take(
+        'targetWidthCm',
+        src.targetWidthCm === null || Number(src.targetWidthCm) > 0,
+        src.targetWidthCm as number | null,
+        null,
+      ),
+      render: take('render', RENDER_MODES.includes(src.render as RenderMode), src.render as RenderMode, 'edges'),
+      params,
+      invert: take('invert', typeof src.invert === 'boolean', src.invert as boolean, false),
+      strokeColor: take(
+        'strokeColor',
+        typeof src.strokeColor === 'string' && /^#[0-9a-f]{6}$/i.test(src.strokeColor),
+        src.strokeColor as string,
+        STROKE_COLORS[0],
+      ),
+    },
+    issues,
+  }
+}
+
 export const createSession = (
   { id, name, image, thumb }: { id: string, name: string, image: Blob, thumb: Blob },
 ): TraceSession => {
