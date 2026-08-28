@@ -1,6 +1,7 @@
 import type { DBSchema, IDBPDatabase } from 'idb'
 import { openDB } from 'idb'
 import type { TraceSession } from '~/utils/session'
+import { DEFAULT_PARAMS } from '~/utils/session'
 
 interface TraceDB extends DBSchema {
   sessions: {
@@ -53,6 +54,7 @@ export const useSessions = (): Sessions => {
     loading.value = true
     try {
       const all = await (await db()).getAllFromIndex('sessions', 'by-updated')
+      all.forEach(normalize)
       list.value = all.reverse()
     }
     finally {
@@ -60,7 +62,23 @@ export const useSessions = (): Sessions => {
     }
   }
 
-  const get = async (id: string) => (await db()).get('sessions', id)
+  /**
+   * Les sessions écrites avant la calibration automatique portent un `threshold`
+   * absolu et pas d'`inkRatio`. C'est une donnée produite par une version
+   * antérieure du code : une frontière, au même titre qu'une archive importée.
+   *
+   * Sans cette reprise, un tracé déjà sur l'appareil resterait vide après le
+   * correctif — précisément le symptôme qu'on vient de corriger.
+   */
+  const normalize = (session: TraceSession | undefined) => {
+    if (session && typeof session.params.inkRatio !== 'number') {
+      session.params.inkRatio = DEFAULT_PARAMS.inkRatio
+    }
+
+    return session
+  }
+
+  const get = async (id: string) => normalize(await (await db()).get('sessions', id))
 
   /**
    * `toRaw` n'est pas une précaution : sans lui **rien ne s'enregistre**.

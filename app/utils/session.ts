@@ -13,8 +13,15 @@ export interface RenderParams {
   opacity: number
   contrast: number
   gamma: number
-  /** Seuil du détecteur de contours, sur la magnitude de Sobel normalisée. */
-  threshold: number
+  /**
+   * Part de l'image à encrer en rendu « Contours », de 0 à 1 — **et non un seuil**.
+   *
+   * La magnitude d'un gradient ne se compare pas d'une image à l'autre : mesuré sur
+   * le même shader, un seuil de 0,38 encrait 0,01 % d'une photographie et 5,16 %
+   * d'un dessin au trait. La proportion, elle, est stable ; le seuil absolu s'en
+   * déduit par le quantile de l'image ouverte (`utils/edgeStats.ts`).
+   */
+  inkRatio: number
   /** Nombre de paliers en rendu « Aplats ». */
   levels: number
 }
@@ -81,7 +88,9 @@ export const DEFAULT_PARAMS: RenderParams = {
   opacity: 0.42,
   contrast: 0,
   gamma: 1,
-  threshold: 0.38,
+  // 8 % : assez de trait pour décalquer un visage ou une architecture, assez peu
+  // pour que le grain de la photo ne remonte pas en semis de points.
+  inkRatio: 0.08,
   levels: 4,
 }
 

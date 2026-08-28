@@ -11,6 +11,7 @@
  * La sortie porte un **alpha**, jamais une image opaque : sur un calque de
  * décalquage il faut voir le papier entre les traits.
  */
+import type { EdgeRamp } from './edgeStats'
 import type { RenderMode, RenderParams } from './session'
 
 const VERTEX_SRC = `
@@ -33,11 +34,16 @@ uniform vec2 uTexel;
 uniform int uMode;
 uniform float uContrast;
 uniform float uGamma;
-uniform float uThreshold;
+// Bornes de la rampe d'encrage, dérivées de la distribution de CETTE image par
+// edgeRamp() dans utils/edgeStats.ts. Ni l'une ni l'autre n'est une constante.
+uniform float uEdgeStart;
+uniform float uEdgeFull;
 uniform float uLevels;
 uniform float uInvert;
 uniform vec3 uStroke;
 
+// Doit rester identique à lumaFrom() dans utils/edgeStats.ts, qui calibre
+// uThreshold : une divergence décalerait le seuil par rapport au rendu réel.
 float luma(vec3 c) {
   return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
@@ -73,13 +79,15 @@ void main() {
     float gx = (tr + 2.0 * mr + br) - (tl + 2.0 * ml + bl);
     float gy = (bl + 2.0 * bm + br) - (tl + 2.0 * tm + tr);
 
-    // Le noyau sature à 4 par axe : la division ramène la magnitude vers 0-1.
+    /* Le noyau sature à 4 par axe : la division ramène la magnitude vers 0-1.
+       sobelMagnitudes() dans utils/edgeStats.ts reproduit ce noyau ET cette
+       division pour calibrer uThreshold — les deux doivent bouger ensemble. */
     float mag = clamp(length(vec2(gx, gy)) / 4.0, 0.0, 1.0);
 
-    /* Un seuil franc crénellerait chaque trait. La rampe étroite au-dessus du
-       seuil rend un antialiasing gratuit, et c'est elle qui fait la différence
-       entre un contour lisible et un pointillé sur une photo bruitée. */
-    gl_FragColor = vec4(uStroke, smoothstep(uThreshold, uThreshold + 0.08, mag));
+    /* Un seuil franc crénellerait chaque trait ; la rampe rend un antialiasing
+       gratuit. Ses deux bornes viennent des quantiles de l'image : une largeur
+       constante vaudrait un contraste sur une photo et un autre sur un dessin. */
+    gl_FragColor = vec4(uStroke, smoothstep(uEdgeStart, uEdgeFull, mag));
     return;
   }
 
@@ -118,6 +126,13 @@ const compile = (gl: WebGLRenderingContext, type: number, source: string): WebGL
 export interface TraceRenderOptions {
   render: RenderMode
   params: RenderParams
+  /**
+   * Bornes **absolues** de la rampe d'encrage. Séparées de `params` à dessein :
+   * ce sont des valeurs **dérivées** de l'image — les quantiles correspondant à
+   * `params.inkRatio`, calculés par `utils/edgeStats.ts` — et non des réglages
+   * persistés. Les confondre laisserait croire qu'elles voyagent avec la session.
+   */
+  edge: EdgeRamp
   invert: boolean
   strokeColor: string
 }
@@ -200,7 +215,7 @@ export class TraceRenderer {
     gl.useProgram(program)
 
     this.uniforms = new Map(
-      ['uImage', 'uTexel', 'uMode', 'uContrast', 'uGamma', 'uThreshold', 'uLevels', 'uInvert', 'uStroke']
+      ['uImage', 'uTexel', 'uMode', 'uContrast', 'uGamma', 'uEdgeStart', 'uEdgeFull', 'uLevels', 'uInvert', 'uStroke']
         .map(name => [name, gl.getUniformLocation(program, name)]),
     )
 
@@ -255,7 +270,8 @@ export class TraceRenderer {
     gl.uniform1i(u('uMode'), MODE_INDEX[options.render])
     gl.uniform1f(u('uContrast'), params.contrast)
     gl.uniform1f(u('uGamma'), params.gamma)
-    gl.uniform1f(u('uThreshold'), params.threshold)
+    gl.uniform1f(u('uEdgeStart'), options.edge.start)
+    gl.uniform1f(u('uEdgeFull'), options.edge.full)
     gl.uniform1f(u('uLevels'), params.levels)
     gl.uniform1f(u('uInvert'), options.invert ? 1 : 0)
     gl.uniform3fv(u('uStroke'), hexToRgb(options.strokeColor))

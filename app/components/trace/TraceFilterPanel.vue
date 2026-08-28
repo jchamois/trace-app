@@ -64,14 +64,17 @@ const paramsTitle = computed(() => ({
         {{ paramsTitle }}
       </h3>
 
+      <!-- « Quantité de trait » et non « Seuil » : le réglage est la part de l'image
+           encrée, le seuil de gradient s'en déduit par le quantile de cette photo.
+           Une magnitude ne se compare pas d'une image à l'autre, une proportion si. -->
       <BaseSlider
         v-if="session.render === 'edges'"
-        v-model="session.params.threshold"
-        label="Seuil"
-        :min="0.02"
-        :max="0.9"
-        :step="0.01"
-        :format="decimal"
+        v-model="session.params.inkRatio"
+        label="Quantité de trait"
+        :min="0.01"
+        :max="0.3"
+        :step="0.005"
+        :format="percent"
       />
 
       <BaseSlider

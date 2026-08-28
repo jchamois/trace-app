@@ -8,6 +8,7 @@
  * dégraderait justement le flux qu'on cherche à afficher. Le shader ne traite que
  * la photo, qui est statique, et le calage est un `matrix3d` composé par le GPU.
  */
+import { edgeRamp, lumaFrom, SAMPLE_STEP, sobelMagnitudes } from '~/utils/edgeStats'
 import type { Quad } from '~/utils/homography'
 import { applyToPoint, solveHomography, toMatrix3d, UNIT_SQUARE } from '~/utils/homography'
 import { placementOf, placementQuad, subjectSizeCm } from '~/utils/paper'
@@ -56,10 +57,47 @@ const transform = computed(() => {
   return toMatrix3d(solveHomography(canvasRect, onScreen))
 })
 
+/**
+ * Distribution des magnitudes de Sobel de cette image, triée. Calculée **une fois**
+ * à l'ouverture ; c'est elle qui convertit la « quantité de trait » voulue en seuil
+ * absolu pour le shader.
+ *
+ * `shallowRef` : un tableau de 250 000 flottants n'a rien à faire dans un proxy
+ * réactif profond, et il n'est jamais muté — seulement remplacé.
+ */
+const magnitudes = shallowRef<Float32Array>(new Float32Array(0))
+
+/**
+ * Mesure les contours **à la définition à laquelle le shader travaille**, en
+ * échantillonnant un pixel sur seize.
+ *
+ * Ne pas réduire l'image pour aller plus vite : un Sobel mesure l'écart entre
+ * pixels voisins, donc sa magnitude dépend de la définition. Une vignette produit
+ * des gradients bien plus forts, et le seuil qu'on en tire ne laisse presque rien
+ * passer au rendu.
+ */
+const measureEdges = (bitmap: ImageBitmap) => {
+  const { width: w, height: h } = bitmap
+
+  const probe = document.createElement('canvas')
+  probe.width = w
+  probe.height = h
+
+  const ctx = probe.getContext('2d', { willReadFrequently: false })!
+  ctx.drawImage(bitmap, 0, 0)
+
+  magnitudes.value = sobelMagnitudes(lumaFrom(ctx.getImageData(0, 0, w, h).data), w, h, SAMPLE_STEP)
+
+  // Rend tout de suite les ~12 Mo du tampon : le canvas de mesure ne resservira pas.
+  probe.width = 0
+  probe.height = 0
+}
+
 const paint = () => {
   renderer?.render({
     render: session.render,
     params: session.params,
+    edge: edgeRamp(magnitudes.value, session.params.inkRatio),
     invert: session.invert,
     strokeColor: session.strokeColor,
   })
@@ -75,6 +113,11 @@ onMounted(async () => {
   const bitmap = await createImageBitmap(session.image)
   imageSize.value = { w: bitmap.width, h: bitmap.height }
   emit('loaded', imageSize.value)
+
+  // Avant le premier `paint()` : sans distribution, le seuil vaudrait 0 et le
+  // rendu Contours encrerait toute l'image le temps d'une image.
+  measureEdges(bitmap)
+
   renderer.setImage(bitmap)
   paint()
 })
