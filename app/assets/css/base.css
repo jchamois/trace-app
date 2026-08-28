@@ -49,6 +49,12 @@ body {
 body {
   user-select: none;
   -webkit-user-select: none;
+
+  /* Sans ça, l'appui long du mode dessin — 400 ms pour effacer le calque et juger
+     son tracé — déclenche le menu contextuel du système par-dessus, pendant le
+     geste. `user-select: none` seul ne suffit pas : la bulle « Copier / Partager »
+     d'iOS et l'appui long d'Android ont leur propre déclencheur. */
+  -webkit-touch-callout: none;
 }
 
 input,
