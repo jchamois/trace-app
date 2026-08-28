@@ -9,9 +9,7 @@
  * la photo, qui est statique, et le calage est un `matrix3d` composé par le GPU.
  */
 import { edgeRamp, SAMPLE_STEP, sobelMagnitudes } from '~/utils/edgeStats'
-import type { Quad } from '~/utils/homography'
-import { applyToPoint, solveHomography, toMatrix3d, UNIT_SQUARE } from '~/utils/homography'
-import { placementOf, placementQuad, subjectSizeCm } from '~/utils/paper'
+import { placeOverlay } from '~/utils/overlay'
 import type { TraceSession } from '~/utils/session'
 import { applyTone, lumaFrom } from '~/utils/tone'
 import { TraceRenderer } from '~/utils/traceShader'
@@ -36,27 +34,17 @@ let renderer: TraceRenderer | null = null
 const imageSize = ref({ w: 0, h: 0 })
 
 /**
- * La chaîne complète : carré unité → feuille à l'écran, puis rectangle de l'image
- * sur la feuille → écran. Deux homographies composées, et non une seule, parce que
- * la position de l'image **sur le papier** dépend du format et de la taille cible,
- * qui changent sans que le calage bouge.
+ * Où poser le calque. Toute la chaîne vit dans `utils/overlay.ts`, qui rend la
+ * matrice **et** la taille CSS : les deux viennent du même calcul, donc elles ne
+ * peuvent plus diverger.
  */
-const transform = computed(() => {
-  if (!size.w || !size.h || !imageSize.value.w || !session.corners) return null
-
-  const paperQuad = session.corners
-    .map(c => ({ x: c.x * size.w, y: c.y * size.h })) as unknown as Quad
-
-  const paper = solveHomography(UNIT_SQUARE, paperQuad)
-  const subject = subjectSizeCm(session.paperSizeCm, imageSize.value, session.targetWidthCm)
-  const onPaper = placementQuad(placementOf(session.paperSizeCm, subject))
-
-  const onScreen = onPaper.map(p => applyToPoint(paper, p)) as unknown as Quad
-  const { w, h } = imageSize.value
-  const canvasRect: Quad = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }]
-
-  return toMatrix3d(solveHomography(canvasRect, onScreen))
-})
+const placement = computed(() => placeOverlay({
+  corners: session.corners,
+  viewport: size,
+  paperSizeCm: session.paperSizeCm,
+  targetWidthCm: session.targetWidthCm,
+  imageSize: imageSize.value,
+}))
 
 /**
  * Distribution des magnitudes de Sobel, triée — ce qui convertit la « quantité de
@@ -205,20 +193,19 @@ onScopeDispose(() => {
       disablepictureinpicture
     />
 
-    <!-- La taille CSS est imposée explicitement, et c'est structurel : l'homographie
-         envoie le rectangle `0,0 → imageSize` sur le quadrilatère de l'écran, donc la
-         boîte CSS **doit** valoir exactement la définition de l'image. La laisser
-         déduite de l'attribut la rendait tributaire du reset global
-         (`canvas { max-inline-size: 100% }`), qui la rabotait à la largeur du
-         conteneur — le calque s'affichait alors au tiers de sa taille. -->
+    <!-- Taille CSS et matrice viennent toutes deux de `placeOverlay` : c'est
+         structurel, l'homographie envoie le rectangle `0,0 → imageSize` sur le
+         quadrilatère de l'écran. Déduite de l'attribut, la boîte devenait tributaire
+         du reset global (`canvas { max-inline-size: 100% }`) qui la rabotait, et le
+         calque s'affichait au tiers de sa taille. -->
     <canvas
       ref="canvas"
       class="stack__overlay"
       :class="{ 'stack__overlay--hidden': hidden }"
       :style="{
-        inlineSize: `${imageSize.w}px`,
-        blockSize: `${imageSize.h}px`,
-        transform: transform ?? 'scale(0)',
+        inlineSize: `${placement?.cssSize.w ?? 0}px`,
+        blockSize: `${placement?.cssSize.h ?? 0}px`,
+        transform: placement?.matrix ?? 'scale(0)',
         opacity: session.params.opacity,
       }"
     />

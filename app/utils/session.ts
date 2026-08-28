@@ -3,6 +3,7 @@
  * a qu'une définition, et c'est ici.
  */
 import type { Pt } from './homography'
+import type { Corners } from './overlay'
 
 export type PaperFormat = 'A3' | 'A4' | 'A5' | 'notebook' | 'free'
 export type RenderMode = 'photo' | 'edges' | 'posterize'
@@ -50,7 +51,7 @@ export interface TraceSession {
    * l'écran de travail monté. Un défaut calculé trop tôt donnerait une feuille
    * déformée, et l'image avec elle.
    */
-  corners: [Pt, Pt, Pt, Pt] | null
+  corners: Corners | null
   mode: AlignMode
 
   paperFormat: PaperFormat
@@ -110,7 +111,7 @@ const DEFAULT_FILL = 0.84
 export const defaultCorners = (
   paperRatio: number,
   viewport: { w: number, h: number },
-): [Pt, Pt, Pt, Pt] => {
+): Corners => {
   let width = viewport.w * DEFAULT_FILL
   let height = width / paperRatio
 

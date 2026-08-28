@@ -1,8 +1,9 @@
 import type { Pt } from '~/utils/homography'
 import { isDegenerate } from '~/utils/homography'
+// `Corners` appartient à la géométrie du calque : un second export du même nom ici
+// rendait l'auto-import ambigu, et Nuxt en choisissait un sans le dire.
+import type { Corners } from '~/utils/overlay'
 import type { AlignMode } from '~/utils/session'
-
-export type Corners = [Pt, Pt, Pt, Pt]
 
 /**
  * Rayon de saisie d'une poignée, en pixels CSS. Plus large que le visuel de 36 px :
