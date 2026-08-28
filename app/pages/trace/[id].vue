@@ -12,13 +12,13 @@
  */
 import { formatCm } from '~/utils/paper'
 import type { TraceSession } from '~/utils/session'
-import { defaultCorners, PAPER_LABELS } from '~/utils/session'
+import { collectSession, defaultCorners, PAPER_LABELS } from '~/utils/session'
 
 /** Repli inerte pour la fenêtre — d'une image — où les gestes existent sans calage. */
 const UNCALIBRATED = defaultCorners(1, { w: 1, h: 1 })
 
 const route = useRoute()
-const { get, putSoon, flush } = useSessions()
+const { get, put, putSoon, flush } = useSessions()
 
 const session = ref<TraceSession | null>(null)
 const missing = ref(false)
@@ -61,6 +61,26 @@ const stopDrawing = async () => {
 }
 
 /**
+ * Persiste toute modification réelle — le débounce vit dans `useSessions`, pas ici.
+ *
+ * On compare une **empreinte de l'état**, et non plus un compteur de
+ * déclenchements. Le garde précédent était un booléen qui absorbait *un* seul
+ * déclenchement, alors qu'ouvrir un tracé jamais calé en produit deux : la lecture,
+ * puis le calage par défaut posé après le `ResizeObserver`. Le second passait, et
+ * ouvrir un tracé suffisait à réordonner la bibliothèque.
+ *
+ * L'empreinte exclut `updatedAt` : c'est `put` qui l'écrit, et le comparer
+ * relancerait une écriture à chaque écriture.
+ */
+const fingerprint = (session: TraceSession) => {
+  const { updatedAt: _, ...rest } = collectSession(session).value
+
+  return JSON.stringify(rest)
+}
+
+let baseline: string | null = null
+
+/**
  * Le calage par défaut dépend des proportions du viewport, qu'on ne connaît qu'ici.
  * C'est aussi ce qui rend « Recaler » trivial : le panneau papier remet `corners` à
  * `null`, et le défaut se recalcule tout seul.
@@ -70,6 +90,13 @@ watch([size, session], () => {
 
   const { w, h } = session.value.paperSizeCm
   session.value.corners = defaultCorners(w / h, size.value)
+
+  /* Écrit ici, avec `touch: false`, et l'empreinte absorbée : poser un calage par
+     défaut est une initiative du système, pas une modification de l'utilisateur.
+     La compter comme telle remonterait le tracé en tête de bibliothèque au simple
+     fait de l'ouvrir. */
+  baseline = fingerprint(session.value)
+  void put(session.value, { touch: false })
 }, { deep: true })
 
 const gestures = useTraceGestures({
@@ -142,6 +169,7 @@ onMounted(async () => {
   }
 
   session.value = found
+  baseline = fingerprint(found)
 
   await nextTick()
 
@@ -156,18 +184,14 @@ onMounted(async () => {
   await camera.start()
 })
 
-/* Toute mutation de la session est persistée, calage compris — le débounce vit dans
-   `useSessions`, pas ici. Le premier déclenchement est la lecture elle-même : le
-   compter réécrirait `updatedAt` à la simple ouverture, ce qui remonterait le tracé
-   en tête de bibliothèque sans qu'on y ait touché. */
-let loaded = false
-
 watch(session, (value) => {
-  if (!loaded) {
-    loaded = true
-    return
-  }
-  if (value) putSoon(value)
+  if (!value) return
+
+  const current = fingerprint(value)
+  if (current === baseline) return
+
+  baseline = current
+  putSoon(value)
 }, { deep: true })
 
 onBeforeUnmount(async () => {

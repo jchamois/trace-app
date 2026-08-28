@@ -186,20 +186,37 @@ export const useTraceGestures = (
     }
   }
 
-  const listeners = new AbortController()
+  /**
+   * Suit la référence au lieu de l'échantillonner une fois.
+   *
+   * L'ancienne version lisait `surface.value` dans `onMounted` et sortait en
+   * silence s'il était nul. Or l'élément vit derrière un `v-else` sur l'état de la
+   * caméra : un échec suivi de « Réessayer » le démonte et le remonte, et les
+   * écouteurs restaient attachés à l'ancien nœud, définitivement. Le calage cessait
+   * de répondre sans le moindre message.
+   *
+   * Le contrat annoncé — « donne-moi une `Ref`, je la suis » — est désormais tenu.
+   */
+  let listeners: AbortController | null = null
 
-  onMounted(() => {
-    const el = surface.value
+  const unbind = () => {
+    listeners?.abort()
+    listeners = null
+  }
+
+  watch(surface, (el) => {
+    unbind()
     if (!el) return
 
+    listeners = new AbortController()
     const signal = listeners.signal
     el.addEventListener('pointerdown', onPointerDown, { signal })
     el.addEventListener('pointermove', onPointerMove, { signal })
     el.addEventListener('pointerup', onPointerUp, { signal })
     el.addEventListener('pointercancel', onPointerUp, { signal })
-  })
+  }, { immediate: true, flush: 'post' })
 
-  onScopeDispose(() => listeners.abort())
+  onScopeDispose(unbind)
 
   return { activeHandle, gesturing }
 }
