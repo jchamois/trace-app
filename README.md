@@ -1,5 +1,8 @@
 # trace-app
 
+**[trace-app-decalque.web.app](https://trace-app-decalque.web.app)** — installable
+depuis le navigateur, fonctionne hors ligne.
+
 PWA mobile pour **décalquer une photo sur une feuille de papier**.
 
 Le téléphone est fixé sur un support au-dessus d'une feuille, sa caméra arrière la
