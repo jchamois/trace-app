@@ -46,10 +46,12 @@ jobs:
       # site vide sans qu'aucune étape n'échoue.
       - run: npm run generate
 
-      # Le site cible tient dans `firebase.json` : ni `target` ici, ni cible dans
-      # `.firebaserc`.
+      # `projectId` explicite : l'action sait l'inférer de `.firebaserc`, mais le
+      # compte de service peut avoir accès à plusieurs projets et l'inférence est
+      # alors silencieusement ambiguë.
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: trace-app-decalque
           channelId: live
