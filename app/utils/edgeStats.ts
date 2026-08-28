@@ -28,25 +28,13 @@
 export const SAMPLE_STEP = 4
 
 /**
- * Luminance perceptuelle, coefficients Rec. 709.
- *
- * **Doit rester identique à `luma()` dans `traceShader.ts`.** Les deux calculent la
- * même chose de part et d'autre du GPU : une divergence décalerait silencieusement
- * la calibration par rapport à ce qui est réellement dessiné.
- */
-export const lumaFrom = (rgba: Uint8ClampedArray): Float32Array => {
-  const gray = new Float32Array(rgba.length / 4)
-
-  for (let i = 0; i < gray.length; i++) {
-    gray[i] = (0.2126 * rgba[i * 4]! + 0.7152 * rgba[i * 4 + 1]! + 0.0722 * rgba[i * 4 + 2]!) / 255
-  }
-
-  return gray
-}
-
-/**
  * Magnitudes de Sobel, **triées croissant** — la forme dont `thresholdForRatio` a
  * besoin, et le tri se paie une seule fois.
+ *
+ * Attend des valeurs **déjà étalonnées** (`applyTone` dans `utils/tone.ts`) : le
+ * shader court son Sobel sur la tonalité, pas sur la luminance brute. Lui passer du
+ * brut était le bug d'origine — les deux mesuraient alors des mondes différents dès
+ * que le curseur Contraste bougeait.
  *
  * Noyau 3×3 et normalisation `/4` repris **à l'identique** du fragment shader
  * (`traceShader.ts`, branche `uMode == 1`). Les bords sont ignorés, comme dans le

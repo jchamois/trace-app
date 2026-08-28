@@ -13,6 +13,7 @@
  */
 import type { EdgeRamp } from './edgeStats'
 import type { RenderMode, RenderParams } from './session'
+import { TONE_GLSL } from './tone'
 
 const VERTEX_SRC = `
 attribute vec2 aPos;
@@ -42,26 +43,22 @@ uniform float uLevels;
 uniform float uInvert;
 uniform vec3 uStroke;
 
-// Doit rester identique à lumaFrom() dans utils/edgeStats.ts, qui calibre
-// uThreshold : une divergence décalerait le seuil par rapport au rendu réel.
-float luma(vec3 c) {
-  return dot(c, vec3(0.2126, 0.7152, 0.0722));
-}
+/* Injecté depuis utils/tone.ts, qui porte AUSSI la version TypeScript de ce
+   calcul. Les deux vivent dans le même fichier et tests/tone.spec.ts les confronte
+   à travers un vrai contexte WebGL : le seam est exécutable, il n'est plus un
+   commentaire. */
+${TONE_GLSL}
 
-vec3 grade(vec3 c) {
-  vec3 v = pow(clamp(c, 0.0, 1.0), vec3(1.0 / uGamma));
-  v = clamp((v - 0.5) * (1.0 + uContrast) + 0.5, 0.0, 1.0);
-  return mix(v, 1.0 - v, uInvert);
-}
-
+// La chaîne tonale des contours et des aplats : luminance puis étalonnage.
+// C'est exactement ce que reproduit applyTone() côté CPU pour la calibration.
 float toneAt(vec2 uv) {
-  return luma(grade(texture2D(uImage, uv).rgb));
+  return gradeTone(luma(texture2D(uImage, uv).rgb));
 }
 
 void main() {
   // Photo : la chaîne tonale s'applique par canal pour conserver la couleur.
   if (uMode == 0) {
-    gl_FragColor = vec4(grade(texture2D(uImage, vUv).rgb), 1.0);
+    gl_FragColor = vec4(gradeColor(texture2D(uImage, vUv).rgb), 1.0);
     return;
   }
 
@@ -81,7 +78,7 @@ void main() {
 
     /* Le noyau sature à 4 par axe : la division ramène la magnitude vers 0-1.
        sobelMagnitudes() dans utils/edgeStats.ts reproduit ce noyau ET cette
-       division pour calibrer uThreshold — les deux doivent bouger ensemble. */
+       division ; tests/tone.spec.ts vérifie que les deux s'accordent. */
     float mag = clamp(length(vec2(gx, gy)) / 4.0, 0.0, 1.0);
 
     /* Un seuil franc crénellerait chaque trait ; la rampe rend un antialiasing

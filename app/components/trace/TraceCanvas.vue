@@ -8,11 +8,12 @@
  * dégraderait justement le flux qu'on cherche à afficher. Le shader ne traite que
  * la photo, qui est statique, et le calage est un `matrix3d` composé par le GPU.
  */
-import { edgeRamp, lumaFrom, SAMPLE_STEP, sobelMagnitudes } from '~/utils/edgeStats'
+import { edgeRamp, SAMPLE_STEP, sobelMagnitudes } from '~/utils/edgeStats'
 import type { Quad } from '~/utils/homography'
 import { applyToPoint, solveHomography, toMatrix3d, UNIT_SQUARE } from '~/utils/homography'
 import { placementOf, placementQuad, subjectSizeCm } from '~/utils/paper'
 import type { TraceSession } from '~/utils/session'
+import { applyTone, lumaFrom } from '~/utils/tone'
 import { TraceRenderer } from '~/utils/traceShader'
 
 const { stream, session, size, hidden = false } = defineProps<{
@@ -58,25 +59,54 @@ const transform = computed(() => {
 })
 
 /**
- * Distribution des magnitudes de Sobel de cette image, triée. Calculée **une fois**
- * à l'ouverture ; c'est elle qui convertit la « quantité de trait » voulue en seuil
- * absolu pour le shader.
+ * Distribution des magnitudes de Sobel, triée — ce qui convertit la « quantité de
+ * trait » voulue en bornes absolues pour le shader.
  *
- * `shallowRef` : un tableau de 250 000 flottants n'a rien à faire dans un proxy
- * réactif profond, et il n'est jamais muté — seulement remplacé.
+ * `shallowRef` : ces tableaux font des centaines de milliers de flottants, ils
+ * n'ont rien à faire dans un proxy réactif profond et ne sont jamais mutés.
  */
 const magnitudes = shallowRef<Float32Array>(new Float32Array(0))
 
 /**
- * Mesure les contours **à la définition à laquelle le shader travaille**, en
- * échantillonnant un pixel sur seize.
+ * Luminance **brute** pleine définition, gardée entre deux calibrations.
  *
- * Ne pas réduire l'image pour aller plus vite : un Sobel mesure l'écart entre
- * pixels voisins, donc sa magnitude dépend de la définition. Une vignette produit
- * des gradients bien plus forts, et le seuil qu'on en tire ne laisse presque rien
- * passer au rendu.
+ * Elle ne dépend pas des réglages : seul l'étalonnage en dépend. La conserver
+ * évite de redécoder l'image et de refaire un `getImageData` de 12 Mo à chaque
+ * mouvement de curseur.
  */
-const measureEdges = (bitmap: ImageBitmap) => {
+let rawLuma: Float32Array | null = null
+let lumaSize = { w: 0, h: 0 }
+
+/**
+ * Recalcule la distribution pour l'étalonnage courant.
+ *
+ * **Le Sobel tourne sur la tonalité, pas sur la luminance brute** — comme le
+ * shader. C'était le bug : la calibration mesurait le brut, le shader mesurait
+ * l'étalonné, et pousser le contraste multipliait les gradients du shader par trois
+ * pendant que les bornes décrivaient toujours l'autre distribution.
+ */
+const recalibrate = () => {
+  if (!rawLuma) return
+
+  const toned = applyTone(rawLuma, {
+    contrast: session.params.contrast,
+    gamma: session.params.gamma,
+    invert: session.invert,
+  })
+
+  magnitudes.value = sobelMagnitudes(toned, lumaSize.w, lumaSize.h, SAMPLE_STEP)
+}
+
+/**
+ * Lit l'image **à la définition à laquelle le shader travaille**, une seule fois.
+ *
+ * Ne pas réduire pour aller plus vite : un Sobel mesure l'écart entre pixels
+ * voisins, donc sa magnitude dépend de la définition. Une vignette produit des
+ * gradients bien plus forts, et les bornes qu'on en tire ne laissent presque rien
+ * passer au rendu. L'échantillonnage d'un pixel sur seize donne le même coût sans
+ * fausser les unités.
+ */
+const readLuma = (bitmap: ImageBitmap) => {
   const { width: w, height: h } = bitmap
 
   const probe = document.createElement('canvas')
@@ -86,7 +116,8 @@ const measureEdges = (bitmap: ImageBitmap) => {
   const ctx = probe.getContext('2d', { willReadFrequently: false })!
   ctx.drawImage(bitmap, 0, 0)
 
-  magnitudes.value = sobelMagnitudes(lumaFrom(ctx.getImageData(0, 0, w, h).data), w, h, SAMPLE_STEP)
+  rawLuma = lumaFrom(ctx.getImageData(0, 0, w, h).data)
+  lumaSize = { w, h }
 
   // Rend tout de suite les ~12 Mo du tampon : le canvas de mesure ne resservira pas.
   probe.width = 0
@@ -114,24 +145,50 @@ onMounted(async () => {
   imageSize.value = { w: bitmap.width, h: bitmap.height }
   emit('loaded', imageSize.value)
 
-  // Avant le premier `paint()` : sans distribution, le seuil vaudrait 0 et le
+  // Avant le premier `paint()` : sans distribution, les bornes vaudraient 0 et le
   // rendu Contours encrerait toute l'image le temps d'une image.
-  measureEdges(bitmap)
+  readLuma(bitmap)
+  recalibrate()
 
   renderer.setImage(bitmap)
   paint()
 })
 
-/* Un seul observateur sur tout ce que le shader consomme : chaque déplacement de
-   curseur repeint, et rien d'autre ne le déclenche. `deep` parce que `params` est
-   un objet muté champ par champ par les curseurs. */
+/* Deux observateurs, et la distinction est le fond du correctif.
+
+   L'étalonnage — contraste, gamma, inversion — change **la distribution des
+   gradients**, donc les bornes doivent être recalculées avant de repeindre. Les
+   autres réglages ne touchent qu'au rendu.
+
+   `flush: 'post'` et pas de débounce : la recalibration coûte un Sobel sur un
+   pixel sur seize, quelques millisecondes, et la faire attendre rendrait le
+   curseur mensonger le temps du délai. */
 watch(
-  () => [session.render, session.params, session.invert, session.strokeColor],
-  paint,
-  { deep: true },
+  () => [session.params.contrast, session.params.gamma, session.invert],
+  () => {
+    recalibrate()
+    paint()
+  },
+  { flush: 'post' },
 )
 
-onScopeDispose(() => renderer?.dispose())
+watch(
+  () => [
+    session.render,
+    session.params.opacity,
+    session.params.inkRatio,
+    session.params.levels,
+    session.strokeColor,
+  ],
+  paint,
+)
+
+onScopeDispose(() => {
+  renderer?.dispose()
+  // Une douzaine de mégaoctets : les rendre en sortant plutôt qu'au bon vouloir
+  // du ramasse-miettes.
+  rawLuma = null
+})
 </script>
 
 <template>

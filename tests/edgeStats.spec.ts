@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { edgeRamp, lumaFrom, sobelMagnitudes, thresholdForRatio } from '~/utils/edgeStats'
+import { edgeRamp, sobelMagnitudes, thresholdForRatio } from '~/utils/edgeStats'
 
 /** Fabrique une image en niveaux de gris à partir d'une fonction (x, y) → 0..1. */
 const grid = (w: number, h: number, f: (x: number, y: number) => number) => {
@@ -23,22 +23,6 @@ const noise = (x: number, y: number) => {
   const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453
   return n - Math.floor(n)
 }
-
-describe('lumaFrom', () => {
-  it('applique les coefficients Rec. 709 et ramène en 0-1', () => {
-    // Un pixel rouge pur : 0,2126 exactement.
-    const gray = lumaFrom(new Uint8ClampedArray([255, 0, 0, 255]))
-
-    expect(gray[0]).toBeCloseTo(0.2126, 6)
-  })
-
-  it('rend 1 sur du blanc et 0 sur du noir', () => {
-    const gray = lumaFrom(new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255]))
-
-    expect(gray[0]).toBeCloseTo(1, 6)
-    expect(gray[1]).toBeCloseTo(0, 6)
-  })
-})
 
 describe('sobelMagnitudes', () => {
   it('rend zéro sur un aplat', () => {
