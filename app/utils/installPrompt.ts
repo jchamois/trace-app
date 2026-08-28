@@ -60,8 +60,6 @@ export interface InstallContext {
   forced: boolean
   /** Le refus du bandeau, valable 30 jours. */
   refused: boolean
-  /** Au moins un tracé créé : la proposition a alors un sens. */
-  earned: boolean
 }
 
 /**
@@ -78,14 +76,16 @@ export const canOfferInstall = (context: InstallContext): boolean =>
 /**
  * Le bandeau doit-il paraître ?
  *
- * L'éligibilité, moins un refus encore valide, moins le mérite. **Un tracé créé
- * avant de proposer** : le bandeau vante le plein écran et l'écran qui reste
- * allumé, deux arguments qui ne parlent qu'à quelqu'un ayant déjà vu l'écran de
- * travail. Le compte appartient à l'appelant ; ce module ne connaît pas la
- * bibliothèque.
+ * L'éligibilité, moins un refus encore valide. Rien d'autre.
  *
- * `?pwa-force` passe outre le refus **et** le mérite, mais pas l'installation : il
- * sert à voir le bandeau, pas à en inventer un.
+ * Il exigeait auparavant un tracé déjà créé — règle reprise de `charge-app`, où
+ * l'installation reste accessible en permanence depuis une page de profil.
+ * trace-app n'a rien de tel : le bandeau était l'unique porte, fermée par défaut,
+ * puis définitivement close après un refus. Le mérite est parti, et une entrée
+ * permanente est apparue dans le menu de la bibliothèque.
+ *
+ * `?pwa-force` passe outre le refus, mais pas l'installation : il sert à voir le
+ * bandeau, pas à en inventer un.
  */
 export const shouldShowBanner = (context: InstallContext): boolean =>
-  canOfferInstall(context) && (context.forced || (!context.refused && context.earned))
+  canOfferInstall(context) && (context.forced || !context.refused)

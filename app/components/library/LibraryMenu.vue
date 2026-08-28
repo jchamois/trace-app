@@ -12,6 +12,17 @@ const emit = defineEmits<{ close: [] }>()
 
 const { list, put, refresh } = useSessions()
 
+/* L'entrée permanente qui manquait. Le bandeau d'installation est saisonnier — il
+   se refuse, et il n'existe pas sur iOS ; ici l'action reste atteignable. */
+const { canInstall, installed, isIOS, install } = useInstallPrompt()
+
+const startInstall = async () => {
+  await install()
+  // Sur iOS, `install()` ouvre la feuille d'instructions : ce menu doit s'effacer
+  // devant elle. Ailleurs, l'invite native s'affiche par-dessus de toute façon.
+  emit('close')
+}
+
 type Outcome
   = | { kind: 'idle' }
     | { kind: 'working', label: string }
@@ -104,6 +115,22 @@ const restore = async (event: Event) => {
     </p>
 
     <div class="actions">
+      <button
+        v-if="canInstall"
+        type="button"
+        class="actions__secondary"
+        @click="startInstall"
+      >
+        {{ isIOS ? 'Ajouter à l’écran d’accueil' : 'Installer l’application' }}
+      </button>
+
+      <p
+        v-else-if="installed"
+        class="actions__installed"
+      >
+        Application installée sur cet appareil.
+      </p>
+
       <button
         type="button"
         class="actions__primary"
@@ -203,6 +230,17 @@ const restore = async (event: Event) => {
 
 .outcome--working {
   color: var(--text-dim);
+}
+
+.actions__installed {
+  display: flex;
+  align-items: center;
+  min-block-size: 3.5rem;
+  padding-inline: var(--sp-4);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-label);
+  color: var(--text-faint);
 }
 
 .note {

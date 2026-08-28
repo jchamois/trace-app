@@ -7,9 +7,14 @@ useSeoMeta({
   description: 'Décalquez une photo sur une feuille de papier en la superposant au flux de votre caméra.',
 })
 
-const { list, loading, refresh, put } = useSessions()
+const { list, loading, error, refresh, put } = useSessions()
 
 const menuOpen = ref(false)
+const standGuideOpen = ref(false)
+
+/* Rendue ici, une seule fois : le bandeau d'installation comme le menu peuvent
+   l'ouvrir, et `stepsOpen` est partagé par `useState`. */
+const { stepsOpen } = useInstallPrompt()
 const importing = ref(false)
 const importError = ref<string | null>(null)
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
@@ -61,8 +66,11 @@ const pickImage = async (event: Event) => {
         Mes tracés
       </h1>
 
+      <!-- Plus de `v-if` sur la liste : ce menu porte « Restaurer depuis une
+           archive », c'est-à-dire exactement ce dont on a besoin quand la
+           bibliothèque est vide — téléphone neuf, données effacées. Le conditionner
+           à la présence de tracés le rendait inatteignable au seul moment utile. -->
       <button
-        v-if="list.length"
         type="button"
         class="library__menu"
         aria-haspopup="dialog"
@@ -88,7 +96,21 @@ const pickImage = async (event: Event) => {
       Chargement…
     </p>
 
-    <LibraryEmpty v-else-if="!list.length" />
+    <!-- « Cassé » ne doit pas se confondre avec « vide » : sans ce cas, une base
+         illisible affichait l'état vide et laissait croire à une perte de données. -->
+    <p
+      v-else-if="error"
+      class="library__broken"
+      role="alert"
+    >
+      {{ error }}<br>
+      <span>Tes tracés ne sont pas perdus. Réessaie, ou restaure une archive depuis le menu.</span>
+    </p>
+
+    <LibraryEmpty
+      v-else-if="!list.length"
+      @help="standGuideOpen = true"
+    />
 
     <ul
       v-else
@@ -113,6 +135,15 @@ const pickImage = async (event: Event) => {
       >
         {{ importError }}
       </p>
+
+      <button
+        v-if="!list.length"
+        type="button"
+        class="library__secondary"
+        @click="standGuideOpen = true"
+      >
+        Comment installer le support
+      </button>
 
       <button
         type="button"
@@ -145,6 +176,16 @@ const pickImage = async (event: Event) => {
     <LibraryMenu
       v-if="menuOpen"
       @close="menuOpen = false"
+    />
+
+    <LibraryStandGuide
+      v-if="standGuideOpen"
+      @close="standGuideOpen = false"
+    />
+
+    <AppInstallSteps
+      v-if="stepsOpen"
+      @close="stepsOpen = false"
     />
   </div>
 </template>
@@ -223,9 +264,32 @@ const pickImage = async (event: Event) => {
   background: linear-gradient(180deg, transparent, var(--bg) 34%);
 }
 
+.library__secondary {
+  min-block-size: 3.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background-color: #18181B;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+}
+
 .library__error {
   font-size: var(--fs-label);
   color: var(--text);
+}
+
+.library__broken {
+  padding: var(--sp-5);
+  margin-inline: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background-color: #141417;
+  line-height: 1.55;
+}
+
+.library__broken span {
+  color: var(--text-dim);
+  font-size: var(--fs-label);
 }
 
 .library__action {

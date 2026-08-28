@@ -24,7 +24,6 @@ const context = (over: Partial<InstallContext> = {}): InstallContext => ({
   isIOS: false,
   forced: false,
   refused: false,
-  earned: true,
   ...over,
 })
 

@@ -1,4 +1,4 @@
-import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import { canOfferInstall, isIOSSafari, isStandalone, shouldShowBanner } from '~/utils/installPrompt'
 
 /** Un mois : assez pour ne pas harceler, assez court pour ne pas perdre l'invite. */
@@ -29,16 +29,15 @@ export interface InstallPrompt {
   dismiss: () => void
 }
 
-/**
- * `earned` est passé par l'appelant : la couche PWA n'a pas à connaître la
- * bibliothèque. La bibliothèque, elle, sait combien de tracés existent.
- */
-export const useInstallPrompt = (earned: MaybeRefOrGetter<boolean> = false): InstallPrompt => {
+export const useInstallPrompt = (): InstallPrompt => {
   const { $pwa } = useNuxtApp()
 
   const refused = useCookie<boolean>('trace-install-refuse', { maxAge: DISMISS_MAX_AGE })
 
-  const stepsOpen = ref(false)
+  /* `useState` et non `ref` : le bandeau et le menu de la bibliothèque appellent
+     tous deux ce composable, et l'un doit pouvoir ouvrir la feuille d'instructions
+     que l'autre rend. Deux `ref` locaux ne se seraient jamais vus. */
+  const stepsOpen = useState('install-steps', () => false)
   const isIOS = ref(false)
   const forced = ref(false)
 
@@ -66,7 +65,6 @@ export const useInstallPrompt = (earned: MaybeRefOrGetter<boolean> = false): Ins
     isIOS: isIOS.value,
     forced: forced.value,
     refused: Boolean(refused.value),
-    earned: toValue(earned),
   }))
 
   const canInstall = computed(() => canOfferInstall(context.value))

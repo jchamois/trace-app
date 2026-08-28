@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const { bannerVisible, isIOS, stepsOpen, install, dismiss } = useInstallPrompt(
-  // Un tracé créé suffit : le bandeau vante le plein écran et l'écran qui reste
-  // allumé, deux arguments qui ne parlent qu'à qui a déjà vu l'écran de travail.
-  () => useSessions().list.value.length >= 1,
-)
+/* Sans argument, et ce n'est pas qu'une simplification : l'ancien passait
+   `() => useSessions().list.value.length >= 1`, soit un composable appelé **dans un
+   getter de computed** — son `onScopeDispose` s'enregistrait donc hors de tout
+   scope actif, à chaque réévaluation. */
+const { bannerVisible, isIOS, install, dismiss } = useInstallPrompt()
 </script>
 
 <template>
@@ -58,11 +58,6 @@ const { bannerVisible, isIOS, stepsOpen, install, dismiss } = useInstallPrompt(
         </div>
       </aside>
     </Transition>
-
-    <AppInstallSteps
-      v-if="stepsOpen"
-      @close="stepsOpen = false"
-    />
   </div>
 </template>
 
