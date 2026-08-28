@@ -19,8 +19,18 @@ const emit = defineEmits<{ close: [] }>()
 
 const FORMATS = Object.keys(PAPER_LABELS) as PaperFormat[]
 
+/**
+ * `null` tant que la photo n'est pas décodée.
+ *
+ * `imageSize` part à `{ 0, 0 }` et n'est rempli qu'à l'événement `loaded` du
+ * canvas, alors que la barre d'outils est déjà cliquable : sans cette garde,
+ * ouvrir ce panneau dans cette fenêtre divisait par zéro et affichait
+ * « NaN × NaN cm ».
+ */
 const subject = computed(() =>
-  subjectSizeCm(session.value.paperSizeCm, imageSize, session.value.targetWidthCm),
+  imageSize.w && imageSize.h
+    ? subjectSizeCm(session.value.paperSizeCm, imageSize, session.value.targetWidthCm)
+    : null,
 )
 
 const pickFormat = (format: PaperFormat) => {
@@ -84,9 +94,19 @@ const reset = () => {
         Dimensions réelles du sujet
       </h3>
 
-      <p class="measure__value">
+      <p
+        v-if="subject"
+        class="measure__value"
+      >
         <output class="measure__number">{{ formatCm(subject.w) }}</output>
         <span class="measure__rest">× {{ formatCm(subject.h) }} cm</span>
+      </p>
+
+      <p
+        v-else
+        class="measure__pending"
+      >
+        Chargement de l’image…
       </p>
 
       <div class="measure__target">
@@ -191,6 +211,15 @@ const reset = () => {
   font-weight: var(--fw-regular);
   text-transform: uppercase;
   letter-spacing: .1em;
+  color: var(--text-faint);
+}
+
+/* Même hauteur que `.measure__value` : le panneau ne doit pas sauter quand la
+   mesure remplace le message d'attente. */
+.measure__pending {
+  display: flex;
+  align-items: center;
+  block-size: 2.5rem;
   color: var(--text-faint);
 }
 

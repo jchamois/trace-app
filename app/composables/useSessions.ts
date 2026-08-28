@@ -42,7 +42,6 @@ export interface Sessions {
   get: (id: string) => Promise<TraceSession | undefined>
   put: (session: TraceSession) => Promise<void>
   putSoon: (session: TraceSession) => void
-  remove: (id: string) => Promise<void>
   flush: () => Promise<void>
 }
 
@@ -129,15 +128,10 @@ export const useSessions = (): Sessions => {
     }, WRITE_DEBOUNCE_MS)
   }
 
-  const remove = async (id: string) => {
-    await (await db()).delete('sessions', id)
-    list.value = list.value.filter(s => s.id !== id)
-  }
-
   /* Sans ça, quitter l'écran de travail pendant la fenêtre de 400 ms perdrait le
      dernier calage — c'est-à-dire précisément celui que l'utilisateur venait
      d'ajuster avant de sortir. */
   onScopeDispose(() => void flush())
 
-  return { list, loading, refresh, get, put, putSoon, remove, flush }
+  return { list, loading, refresh, get, put, putSoon, flush }
 }

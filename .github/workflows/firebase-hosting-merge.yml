@@ -27,9 +27,17 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      # Actions épinglées sur un SHA complet, jamais sur un tag. Un tag est mutable :
+      # qui contrôle le dépôt d'une action peut le repointer, et le job suivant lui
+      # remet `FIREBASE_SERVICE_ACCOUNT` — de quoi défigurer le site et servir un
+      # service worker empoisonné aux PWA déjà installées.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Sans ça, `GITHUB_TOKEN` reste dans `.git/config` pendant `npm ci` et le
+          # build. Aucune étape ne pousse : le garder ne sert à rien.
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: '.nvmrc'
           cache: npm
@@ -49,7 +57,7 @@ jobs:
       # `projectId` explicite : l'action sait l'inférer de `.firebaserc`, mais le
       # compte de service peut avoir accès à plusieurs projets et l'inférence est
       # alors silencieusement ambiguë.
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      - uses: FirebaseExtended/action-hosting-deploy@500ac625ca2dd40cbd15f7659af953801858032a # v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

@@ -24,13 +24,6 @@ export type Mat3 = readonly [
   number, number, number,
 ]
 
-export interface SimpleTransform {
-  tx: number
-  ty: number
-  scale: number
-  rotation: number
-}
-
 /** L'espace de référence : les coins de la feuille en coordonnées normalisées. */
 export const UNIT_SQUARE: Quad = [
   { x: 0, y: 0 },
@@ -38,8 +31,6 @@ export const UNIT_SQUARE: Quad = [
   { x: 1, y: 1 },
   { x: 0, y: 1 },
 ]
-
-export const IDENTITY: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
 /* Seuil sur le **sinus** de l'angle à chaque coin, et non sur le produit vectoriel
    brut : le produit dépend de l'échelle (1 pour le carré unité, ~10⁴ en pixels),
@@ -158,44 +149,6 @@ export const applyToPoint = (h: Mat3, p: Pt): Pt => {
     x: (h[0] * p.x + h[1] * p.y + h[2]) / w,
     y: (h[3] * p.x + h[4] * p.y + h[5]) / w,
   }
-}
-
-/**
- * Inverse par la comatrice. Sert à deux choses : ramener un toucher écran dans
- * l'espace normalisé de la feuille (test de survol des poignées), et convertir une
- * mesure en pixels en une mesure en centimètres de papier.
- */
-export const invert = (h: Mat3): Mat3 => {
-  const [a, b, c, d, e, f, g, i, j] = h
-
-  const det = a * (e * j - f * i) - b * (d * j - f * g) + c * (d * i - e * g)
-  if (det === 0) throw new Error('invert : matrice singulière.')
-
-  return [
-    (e * j - f * i) / det, (c * i - b * j) / det, (b * f - c * e) / det,
-    (f * g - d * j) / det, (a * j - c * g) / det, (c * d - a * f) / det,
-    (d * i - e * g) / det, (b * g - a * i) / det, (a * e - b * d) / det,
-  ]
-}
-
-/**
- * Le mode « simple » (glisser / pincer / pivoter) est une homographie **contrainte**
- * — sa dernière ligne reste `[0 0 1]`, donc aucune fuite. C'est ce qui permet aux
- * deux modes de partager un unique chemin de rendu et une unique persistance :
- * basculer vers le calage 4 coins revient à déverrouiller les poignées là où elles
- * se trouvent, sans que rien ne bouge à l'écran.
- *
- * Ordre : rotation autour de l'origine, puis échelle, puis translation.
- */
-export const composeSimple = ({ tx, ty, scale, rotation }: SimpleTransform): Mat3 => {
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
-
-  return [
-    scale * cos, -scale * sin, tx,
-    scale * sin, scale * cos, ty,
-    0, 0, 1,
-  ]
 }
 
 /**

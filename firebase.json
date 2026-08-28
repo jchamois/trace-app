@@ -30,12 +30,20 @@
             "value": "strict-origin-when-cross-origin"
           },
           {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin"
+          },
+          {
+            "key": "Cross-Origin-Resource-Policy",
+            "value": "same-origin"
+          },
+          {
             "key": "Permissions-Policy",
-            "value": "camera=(self), microphone=(), geolocation=(), interest-cohort=()"
+            "value": "camera=(self), microphone=(), geolocation=(), browsing-topics=(), display-capture=(), usb=(), serial=(), bluetooth=(), payment=(), midi=(), xr-spatial-tracking=()"
           },
           {
             "key": "Content-Security-Policy",
-            "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'"
+            "value": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; font-src 'self'; img-src 'self' blob:; media-src 'self' blob: mediastream:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'"
           },
           {
             "key": "Cache-Control",

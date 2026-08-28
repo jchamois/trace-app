@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Mat3, Pt, Quad } from '~/utils/homography'
 import {
   applyToPoint,
-  composeSimple,
-  invert,
   isDegenerate,
   solveHomography,
   toMatrix3d,
@@ -71,26 +69,6 @@ describe('solveHomography', () => {
   })
 })
 
-describe('invert', () => {
-  it('fait l’aller-retour sur des points quelconques', () => {
-    const h = solveHomography(UNIT_SQUARE, quad([120, 80], [280, 80], [340, 300], [60, 300]))
-    const back = invert(h)
-
-    for (const pt of [{ x: 0.2, y: 0.1 }, { x: 0.87, y: 0.64 }, { x: 0.5, y: 0.5 }]) {
-      expectPointClose(applyToPoint(back, applyToPoint(h, pt)), pt)
-    }
-  })
-
-  it('ramène un point écran dans l’espace normalisé de la feuille', () => {
-    const paper = quad([120, 80], [280, 80], [340, 300], [60, 300])
-    const back = invert(solveHomography(UNIT_SQUARE, paper))
-
-    // Le coin bas-droit de la feuille est le coin (1,1) de l'espace normalisé :
-    // c'est ce calcul qui sert au test de survol des poignées.
-    expectPointClose(applyToPoint(back, paper[2]!), { x: 1, y: 1 })
-  })
-})
-
 describe('isDegenerate', () => {
   it('accepte un quadrilatère convexe, y compris fortement incliné', () => {
     expect(isDegenerate(UNIT_SQUARE)).toBe(false)
@@ -112,34 +90,6 @@ describe('isDegenerate', () => {
     // Un coin rentrant : la surface reste non nulle, seul le test de convexité
     // l'attrape. Le rendu s'y replierait sur lui-même.
     expect(isDegenerate(quad([0, 0], [100, 0], [10, 10], [0, 100]))).toBe(true)
-  })
-})
-
-describe('composeSimple', () => {
-  it('rend l’identité sans paramètres', () => {
-    const h = composeSimple({ tx: 0, ty: 0, scale: 1, rotation: 0 })
-
-    expectPointClose(applyToPoint(h, { x: 3, y: 4 }), { x: 3, y: 4 })
-  })
-
-  it('applique la rotation autour de l’origine, puis l’échelle, puis la translation', () => {
-    const h = composeSimple({ tx: 10, ty: 0, scale: 2, rotation: Math.PI / 2 })
-
-    // (1,0) → rotation +90° → (0,1) → ×2 → (0,2) → +(10,0) → (10,2)
-    expectPointClose(applyToPoint(h, { x: 1, y: 0 }), { x: 10, y: 2 })
-  })
-
-  it('coïncide avec solveHomography sur le quadrilatère qu’elle produit', () => {
-    /* Le mode simple et le calage 4 coins doivent partager un seul chemin de rendu :
-       ce test est ce qui le garantit. Si les deux divergeaient, basculer d'un mode à
-       l'autre déplacerait l'image. */
-    const simple = composeSimple({ tx: 40, ty: -15, scale: 1.7, rotation: 0.4 })
-    const projected = UNIT_SQUARE.map(pt => applyToPoint(simple, pt)) as unknown as Quad
-    const solved = solveHomography(UNIT_SQUARE, projected)
-
-    for (const pt of [{ x: 0.25, y: 0.8 }, { x: 0.9, y: 0.1 }]) {
-      expectPointClose(applyToPoint(solved, pt), applyToPoint(simple, pt))
-    }
   })
 })
 
